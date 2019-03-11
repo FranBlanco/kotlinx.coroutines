@@ -13,14 +13,14 @@ class ServiceLoaderTest {
     @Test
     fun testLoadingCrossModuleService() {
         val providers = MainDispatcherFactory::class.java.let { FastServiceLoader.loadProviders(it, it.classLoader) }
-        assertTrue(providers.isNotEmpty())
+        assertEquals(providers.size, 2)
     }
 
     @InternalCoroutinesApi
     @Test
     fun testLoadingSameModuleService() {
         val providers = CoroutineExceptionHandler::class.java.let { FastServiceLoader.loadProviders(it, it.classLoader) }
-        assertTrue(providers.isNotEmpty())
+        assertEquals(providers.size, 2)
     }
 
     @InternalCoroutinesApi
