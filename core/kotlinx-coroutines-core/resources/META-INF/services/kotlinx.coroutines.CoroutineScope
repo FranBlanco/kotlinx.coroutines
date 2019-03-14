@@ -1,0 +1,13 @@
+kotlinx.coroutines.android.LocalEmptyCoroutineScope
+kotlinx.coroutines.android.LocalEmptyCoroutineScope1
+# testing configuration file parsing # kotlinx.coroutines.service.loader.LocalEmptyCoroutineScope2
+
+kotlinx.coroutines.android.LocalEmptyCoroutineScope2
+
+kotlinx.coroutines.android.LocalEmptyCoroutineScope
+
+
+kotlinx.coroutines.android.LocalEmptyCoroutineScope1
+
+
+kotlinx.coroutines.android.LocalEmptyCoroutineScope#comment

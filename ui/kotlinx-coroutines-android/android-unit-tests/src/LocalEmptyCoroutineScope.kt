@@ -1,4 +1,4 @@
-package kotlinx.coroutines.service.loader
+package kotlinx.coroutines.android
 
 import kotlinx.coroutines.CoroutineScope
 import kotlin.coroutines.CoroutineContext

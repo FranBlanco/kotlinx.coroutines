@@ -1,6 +1,0 @@
-
-dependencies {
-    testImplementation project (':kotlinx-coroutines-core')
-    testImplementation project (':kotlinx-coroutines-android')
-    testImplementation project (":kotlinx-coroutines-test")
-}

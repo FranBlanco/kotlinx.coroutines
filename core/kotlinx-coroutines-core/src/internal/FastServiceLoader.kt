@@ -1,48 +1,47 @@
 package kotlinx.coroutines.internal
 
-import kotlinx.coroutines.InternalCoroutinesApi
-import java.io.*
-import java.net.URL
 import java.util.*
-import java.util.jar.JarFile
-import java.util.zip.ZipEntry
-import java.io.BufferedReader
-import java.lang.Exception
-
-/**
- * Simplified version of [ServiceLoader]
- *
- * FastServiceLoader locates and instantiates all service providers named in configuration files placed in the resource directory <tt>META-INF/services</tt>.
- * In order to speed up reading JAR resources it omits signed JAR verification.
- * In case of [ServiceConfigurationError] thrown service loading falls back to the standard [ServiceLoader].
- */
-private const val PREFIX: String = "META-INF/services/"
+import java.io.*
+import java.net.*
+import java.util.jar.*
+import java.util.zip.*
 
 /**
  * Name of the boolean property that enables using of [FastServiceLoader].
  */
-internal const val FAST_SERVICE_LOADER_PROPERTY_NAME = "kotlinx.coroutines.verify.service.loader"
+private const val FAST_SERVICE_LOADER_PROPERTY_NAME = "kotlinx.coroutines.verify.service.loader"
 
-@JvmField
-internal val FAST_SERVICE_LOADER_ENABLED = systemProp(FAST_SERVICE_LOADER_PROPERTY_NAME, false)
+/**
+ * A simplified version of [ServiceLoader].
+ * FastServiceLoader locates and instantiates all service providers named in configuration
+ * files placed in the resource directory <tt>META-INF/services</tt>.
+ *
+ * The main difference between this class and classic service loader is in skipping
+ * verification JARs. A verification requires reading the whole JAR (and it causes problems and ANRs on Android devices)
+ * and prevents only trivial checksum issues. See #878.
+ *
+ * If any error occurs during loading, it fallbacks to [ServiceLoader], mostly to prevent R8 issues.
+ */
 
-@InternalCoroutinesApi
-public object FastServiceLoader {
+internal object FastServiceLoader {
+    private const val PREFIX: String = "META-INF/services/"
+
+    @JvmField
+    internal val FAST_SERVICE_LOADER_ENABLED = systemProp(FAST_SERVICE_LOADER_PROPERTY_NAME, true)
 
     internal fun <S> load(service: Class<S>, loader: ClassLoader): List<S> {
-        return if (FAST_SERVICE_LOADER_ENABLED) {
-            try {
-                loadProviders(service, loader)
-            } catch (e: Throwable) {
-                ServiceLoader.load(service, loader).toList()
-            }
-        } else {
+        if (!FAST_SERVICE_LOADER_ENABLED) {
+            return ServiceLoader.load(service, loader).toList()
+        }
+        return try {
+            loadProviders(service, loader)
+        } catch (e: Throwable) {
+            // Fallback to default service loader
             ServiceLoader.load(service, loader).toList()
         }
     }
 
-    @InternalCoroutinesApi
-    public fun <S> loadProviders(service: Class<S>, loader: ClassLoader): List<S> {
+    internal fun <S> loadProviders(service: Class<S>, loader: ClassLoader): List<S> {
         val fullServiceName = PREFIX + service.name
         val urls = loader.getResources(fullServiceName).toList()
         val providers = mutableListOf<S>()
@@ -50,35 +49,27 @@ public object FastServiceLoader {
             val providerNames = parse(it)
             providers.addAll(providerNames.map { getProviderInstance(it, loader, service) })
         }
+        require(providers.isNotEmpty()) { "No providers were loaded with FastServiceLoader" }
         return providers
     }
 
     private fun <S> getProviderInstance(name: String, loader: ClassLoader, service: Class<S>): S {
-        val cl = Class.forName(name, false, loader)
-        require(service.isAssignableFrom(cl))
-        return service.cast(cl.getDeclaredConstructor().newInstance())
+        val clazz = Class.forName(name, false, loader)
+        require(service.isAssignableFrom(clazz)) { "Expected service of class $service, but found $clazz" }
+        return service.cast(clazz.getDeclaredConstructor().newInstance())
     }
 
     private fun parse(url: URL): List<String> {
         val string = url.toString()
-        when {
-            string.startsWith("file") -> {
-                val pathToFile = string.substringAfter("file:")
-                BufferedReader(FileReader(pathToFile)).use { r ->
-                    return parseFile(r)
+        return if (string.startsWith("jar")) {
+            val pathToJar = string.substringAfter("jar:file:").substringBefore('!')
+            val entry = string.substringAfter("!/")
+            (JarFile(pathToJar, false) as Closeable).use { file ->
+                BufferedReader(InputStreamReader((file as JarFile).getInputStream(ZipEntry(entry)),"UTF-8")).use { r ->
+                    parseFile(r)
                 }
             }
-            string.startsWith("jar") -> {
-                val pathToJar = string.substringAfter("jar:file:").substringBefore('!')
-                val entry = string.substringAfter("!/")
-                (JarFile(pathToJar, false) as Closeable).use { file ->
-                    BufferedReader(InputStreamReader((file as JarFile).getInputStream(ZipEntry(entry)),"UTF-8")).use { r ->
-                        return parseFile(r)
-                    }
-                }
-            }
-            else -> throw Exception("Error parsing configuration file URL $url")
-        }
+        } else emptyList()
     }
 
     private fun parseFile(r: BufferedReader): List<String> {
@@ -86,7 +77,7 @@ public object FastServiceLoader {
         while (true) {
             val line = r.readLine() ?: break
             val serviceName = line.substringBefore("#").trim()
-            require(serviceName.all { it == '.' || Character.isJavaIdentifierPart(it) })
+            require(serviceName.all { it == '.' || Character.isJavaIdentifierPart(it) }) { "Illegal service provider class name: $serviceName" }
             if (serviceName.isNotEmpty()) {
                 names.add(serviceName)
             }

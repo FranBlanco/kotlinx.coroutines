@@ -24,8 +24,7 @@ internal object MainDispatcherLoader {
 }
 
 /**
- * If anything goes wrong while trying to
- * create main dispatcher (class not found,
+ * If anything goes wrong while trying to create main dispatcher (class not found,
  * initialization failed, etc), then replace the main dispatcher with a special
  * stub that throws an error message on any attempt to actually use it.
  *
