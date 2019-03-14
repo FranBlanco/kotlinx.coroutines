@@ -7,8 +7,6 @@ dependencies {
     testCompile "com.esotericsoftware:kryo:4.0.0"
 
     testImplementation project (':android-unit-tests')
-    testImplementation project (':kotlinx-coroutines-android')
-    testImplementation project (":kotlinx-coroutines-test")
 }
 
 task checkJdk16() {
